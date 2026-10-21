@@ -1,0 +1,756 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Racer 2D</title>
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;overflow:hidden;background:#1d2a1d;font-family:Verdana,Arial,sans-serif;color:#fff;user-select:none}
+canvas{display:block;position:fixed;inset:0}
+.hidden{display:none!important}
+.screen{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:linear-gradient(#1f2a44,#0f1420);z-index:10;padding:10px;overflow:auto}
+.overlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.6);z-index:30;padding:10px}
+.panel{background:#20263a;border:3px solid #000;border-radius:14px;padding:18px;width:min(560px,96vw);max-height:94vh;overflow:auto;box-shadow:0 6px 20px rgba(0,0,0,.5)}
+h1{text-align:center;margin:4px 0 14px;font-size:36px;letter-spacing:3px;color:#ffd166;text-shadow:3px 3px #000}
+h2,h3{margin:6px 0 10px;color:#ffd166}
+label{display:block;margin:10px 0 4px;color:#ccc}
+input,select{width:100%;padding:12px;background:#0d1020;color:#fff;border:2px solid #000;border-radius:8px;font-size:16px}
+.btn{display:block;width:100%;margin:8px 0;padding:14px;background:#2f6fd6;color:#fff;border:2px solid #000;border-radius:10px;font:bold 17px Verdana,sans-serif;cursor:pointer}
+.btn:hover{filter:brightness(1.1)}
+.btn:disabled{background:#444;color:#888;cursor:not-allowed}
+.btn.green{background:#2a9d4f}
+.btn.red{background:#b23a3a}
+.btn.small{display:inline-block;width:auto;padding:7px 12px;font-size:14px;margin:0}
+.row{display:flex;gap:8px;align-items:center}
+.card{background:#2a3150;border:2px solid #000;border-radius:10px;padding:10px;margin:8px 0;display:flex;justify-content:space-between;align-items:center;gap:8px}
+.card small,p small{color:#aaa}
+.money{color:#8fe388;font-weight:bold}
+#carColor{width:100%;height:60px;border:2px solid #000;border-radius:10px;margin-bottom:10px}
+#hud{position:fixed;top:8px;left:8px;z-index:5;background:rgba(0,0,0,.55);padding:8px 12px;border-radius:10px;font-size:15px}
+#hud button{margin-top:6px}
+#touch{position:fixed;bottom:12px;left:0;right:0;display:flex;justify-content:space-between;padding:0 14px;z-index:6}
+#touch .side{display:flex;gap:10px}
+#touch button{width:86px;height:86px;border-radius:50%;background:rgba(255,255,255,.22);border:3px solid #000;color:#fff;font:bold 18px Verdana;touch-action:none}
+#touch button.big{width:110px}
+#mpChat{position:fixed;left:8px;bottom:8px;width:280px;z-index:6;background:rgba(0,0,0,.6);border-radius:10px;padding:8px}
+#chatLog{height:150px;overflow-y:auto;font-size:13px;margin-bottom:6px;line-height:1.4}
+#chatIn{padding:8px;font-size:14px;flex:1;width:auto;min-width:0}
+#status{margin-top:8px;font-size:13px;color:#ffd166;text-align:center;min-height:18px}
+</style>
+</head>
+<body>
+
+<canvas id="cv"></canvas>
+
+<div id="hud" class="hidden">
+  <div id="hudTxt"></div>
+  <button class="btn small red" onclick="toMenu()">Salir</button>
+</div>
+
+<div id="touch" class="hidden">
+  <div class="side">
+    <button data-k="left">◀</button>
+    <button data-k="right">▶</button>
+  </div>
+  <div class="side">
+    <button data-k="brake">FRENO</button>
+    <button class="big" data-k="gas">GAS</button>
+  </div>
+</div>
+
+<div id="mpChat" class="hidden">
+  <div id="chatLog"></div>
+  <div class="row"><input id="chatIn" placeholder="Escribe en el chat..." maxlength="140"><button class="btn small green" onclick="sendChat()">Mandar</button></div>
+</div>
+
+<!-- ENTRAR / CREAR CUENTA -->
+<div id="auth" class="screen">
+  <div class="panel">
+    <h1>RACER 2D</h1>
+    <label>Usuario</label>
+    <input id="au" maxlength="16" autocomplete="username">
+    <label>Contraseña</label>
+    <input id="ap" type="password" maxlength="32" autocomplete="current-password">
+    <button class="btn green" onclick="entrar()">Entrar</button>
+    <button class="btn" onclick="crear()">Crear cuenta</button>
+    <p id="authMsg" style="color:#ff8a8a;min-height:18px"></p>
+  </div>
+</div>
+
+<!-- MENÚ PRINCIPAL -->
+<div id="menu" class="screen hidden">
+  <div class="panel">
+    <h1>RACER 2D</h1>
+    <p id="who"></p>
+    <div style="text-align:center">
+      <img id="avatar" alt="Foto de perfil" style="width:96px;height:96px;border:3px solid #000;border-radius:50%;object-fit:cover;background:#111;visibility:hidden">
+    </div>
+    <label style="display:block;text-align:center;cursor:pointer;background:#2f6fd6;color:#fff;border:2px solid #000;border-radius:10px;padding:10px;margin:8px 0;font-weight:bold">
+      Cambiar foto de perfil
+      <input id="avatarIn" type="file" accept="image/*" style="display:none">
+    </label>
+    <p id="money" class="money"></p>
+    <button class="btn green" onclick="go('setup')">Carrera contra bots</button>
+    <button class="btn" onclick="go('mp')">Multijugador (hasta 100)</button>
+    <button class="btn" onclick="go('garage')">Garaje</button>
+    <button class="btn" onclick="go('editor')">Creador de pistas</button>
+    <button class="btn" onclick="go('friends')">Amigos</button>
+    <button class="btn" onclick="showTut()">Tutorial</button>
+    <button class="btn red" onclick="logout()">Cerrar sesión</button>
+    <div id="status"></div>
+  </div>
+</div>
+
+<!-- GARAJE -->
+<div id="garage" class="screen hidden">
+  <div class="panel">
+    <h2>Garaje</h2>
+    <div id="carColor"></div>
+    <div id="gInfo"></div>
+    <label>Número de carro</label>
+    <div class="row">
+      <button class="btn small" onclick="gMove(-1)">◀</button>
+      <input id="gIdx" type="number" min="0" onchange="gJump()" style="text-align:center">
+      <button class="btn small" onclick="gMove(1)">▶</button>
+    </div>
+    <button id="gBuy" class="btn green" onclick="gBuy()">Comprar</button>
+    <button id="gUse" class="btn" onclick="gUse()">Usar este carro</button>
+    <p id="owned"><small></small></p>
+    <button class="btn" onclick="toMenu()">Volver</button>
+  </div>
+</div>
+
+<!-- CONFIGURAR CARRERA -->
+<div id="setup" class="screen hidden">
+  <div class="panel">
+    <h2>Carrera contra bots</h2>
+    <label>Pista</label>
+    <select id="trackSel"></select>
+    <label>Número de bots (1–19)</label>
+    <select id="botSel">
+      <option>1</option><option>2</option><option>3</option><option>4</option><option>5</option>
+      <option selected>5</option><option>6</option><option>7</option><option>8</option><option>9</option>
+      <option>10</option><option>11</option><option>12</option><option>13</option><option>14</option>
+      <option>15</option><option>16</option><option>17</option><option>18</option><option>19</option>
+    </select>
+    <p id="setupCar"></p>
+    <p><small>Gana para ganar $12,323 virtuales. Los demás puestos dan $500.</small></p>
+    <button class="btn green" onclick="startRace()">¡Empezar carrera!</button>
+    <button class="btn" onclick="toMenu()">Volver</button>
+  </div>
+</div>
+
+<!-- CREADOR DE PISTAS -->
+<div id="editor" class="screen hidden">
+  <div class="panel" style="width:min(940px,98vw)">
+    <h2>Creador de pistas</h2>
+    <p><small>Haz clic para poner puntos del circuito (mínimo 3). El primer punto es amarillo.</small></p>
+    <canvas id="ed" width="900" height="600" style="width:100%;height:auto;border:2px solid #000;border-radius:8px;background:#3d8f3d;cursor:crosshair"></canvas>
+    <label>Nombre de la pista</label>
+    <input id="edName" value="Mi pista">
+    <div class="row" style="margin-top:8px">
+      <button class="btn small" onclick="edUndo()">Deshacer</button>
+      <button class="btn small" onclick="edClear()">Limpiar</button>
+      <button class="btn small green" onclick="edSave()">Guardar pista</button>
+      <button class="btn small" onclick="toMenu()">Volver</button>
+    </div>
+  </div>
+</div>
+
+<!-- AMIGOS -->
+<div id="friends" class="screen hidden">
+  <div class="panel">
+    <h2>Amigos</h2>
+    <div class="row">
+      <input id="fIn" placeholder="Nombre de usuario" maxlength="16">
+      <button class="btn small green" onclick="addFriend()">Añadir</button>
+    </div>
+    <div id="friendList" style="margin-top:10px"></div>
+    <button class="btn" onclick="toMenu()">Volver</button>
+  </div>
+</div>
+
+<!-- TUTORIAL (overlay) -->
+<div id="tut" class="overlay hidden">
+  <div class="panel">
+    <h2>Tutorial</h2>
+    <p id="tutTxt" style="font-size:17px;line-height:1.5"></p>
+    <button id="tutBtn" class="btn green" onclick="tutNext()">Siguiente</button>
+  </div>
+</div>
+
+<!-- RESULTADO (overlay) -->
+<div id="result" class="overlay hidden">
+  <div class="panel" style="text-align:center">
+    <h2>Fin de la carrera</h2>
+    <div id="resTxt" style="font-size:18px;line-height:1.6"></div>
+    <button class="btn green" onclick="closeResult()">Volver al menú</button>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const PXM = 2.5, LAPS = 2, WIN_PRIZE = 12323, PART_PRIZE = 500, START_MONEY = 5000, MAXID = Number.MAX_SAFE_INTEGER;
+const isTouch = matchMedia('(pointer:coarse)').matches || navigator.maxTouchPoints > 0;
+
+let users = JSON.parse(localStorage.getItem('rc_users') || '{}');
+let tracks = JSON.parse(localStorage.getItem('rc_tracks') || '[]');
+let me = null, data = null, tutSeen = localStorage.getItem('rc_tut') === '1', tStep = 0;
+let T = [], N = 0, R = [], racing = false, mpMode = false, phase = '', cd = 0, raceT = 0, placed = 0, mpMe = null;
+let others = [], presence = new Set(), gIdx = 0;
+let camLastT = performance.now(), lastT = performance.now(), sendT = 0;
+let keys = {}, touch = {};
+let ws = null, wsRetry = 0;
+
+const cv = $('cv'), ctx = cv.getContext('2d');
+function resize() { cv.width = innerWidth; cv.height = innerHeight; }
+addEventListener('resize', resize); resize();
+
+// ===================== CUENTAS =====================
+function save() {
+  if (me) users[me] = data;
+  localStorage.setItem('rc_users', JSON.stringify(users));
+  localStorage.setItem('rc_tracks', JSON.stringify(tracks));
+}
+function fmt(n) { return '$' + Math.round(n).toLocaleString('es'); }
+function esc(s) { return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function screen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.add('hidden'));
+  if (id) $(id).classList.remove('hidden');
+}
+function authMsg(t) { $('authMsg').textContent = t; }
+function crear() {
+  const u = $('au').value.trim(), p = $('ap').value;
+  if (u.length < 3) return authMsg('El usuario necesita al menos 3 letras.');
+  if (p.length < 4) return authMsg('La contraseña necesita al menos 4 caracteres.');
+  if (users[u]) return authMsg('Ese usuario ya existe.');
+  users[u] = {pass: p, money: START_MONEY, owned: [0], sel: 0, friends: [], wins: 0, races: 0};
+  login(u);
+}
+function entrar() {
+  const u = $('au').value.trim(), p = $('ap').value;
+  const d = users[u];
+  if (!d || d.pass !== p) return authMsg('Usuario o contraseña incorrectos.');
+  login(u);
+}
+function login(u) {
+  me = u; data = users[u];
+  localStorage.setItem('rc_session', u);
+  save();
+  $('who').textContent = 'Piloto: ' + me;
+  drawAvatar();
+  updMoney();
+  screen('menu');
+  connect();
+  if (!tutSeen) showTut();
+}
+function updMoney() {
+  $('money').textContent = 'Dinero virtual: ' + fmt(data.money) + ' · Victorias: ' + data.wins;
+}
+function logout() {
+  me = null; data = null;
+  localStorage.removeItem('rc_session');
+  if (ws) ws.close();
+  screen('auth');
+}
+function toMenu() {
+  racing = false; mpMode = false; mpMe = null;
+  ['hud', 'touch', 'mpChat'].forEach(id => $(id).classList.add('hidden'));
+  screen('menu');
+  if (me) updMoney();
+}
+function go(s) {
+  if (s === 'garage') { gIdx = data.sel; drawGarage(); }
+  if (s === 'setup') renderSetup();
+  if (s === 'editor') initEditor();
+  if (s === 'friends') renderFriends();
+  if (s === 'mp') return startMP();
+  screen(s);
+}
+
+// ===================== CARROS (generados por fórmula) =====================
+const BRANDS = ['Velox', 'Turbo', 'Aero', 'Nova', 'Vortex', 'Rapid', 'Saturn', 'Titan', 'Blaze', 'Orbit'];
+const TYPES = ['GT', 'RS', 'X', 'Sport', 'Spider', 'Coupe', 'Mk2', 'Zero'];
+const COLORS = ['#e63946', '#457b9d', '#2a9d8f', '#f4a261', '#9b5de5', '#f1c40f', '#ffffff', '#222222'];
+function car(i) {
+  if (i === 0) return {id: 0, name: 'F1 Starter', kph: 178, acc: 9, turn: 3.0, price: 0, color: '#e10600'};
+  const h = k => Math.abs(Math.sin(i * k + 7.31)) % 1;
+  const kph = 178 + Math.floor(h(12.9) * 222);
+  const acc = 3 + Math.floor(h(4.1) * 8);
+  const turn = +(1.6 + h(8.3) * 1.6).toFixed(2);
+  const name = BRANDS[Math.floor(h(3.7) * BRANDS.length)] + ' ' + TYPES[Math.floor(h(5.2) * TYPES.length)] + ' #' + i;
+  const price = Math.round(5000 + kph * 30 + acc * 800);
+  const color = COLORS[Math.floor(h(9.1) * COLORS.length)];
+  return {id: i, name, kph, acc, turn, price, color};
+}
+function drawGarage() {
+  const c = car(gIdx);
+  const owned = data.owned.includes(gIdx);
+  $('carColor').style.background = c.color;
+  $('gInfo').innerHTML = `<h3>${esc(c.name)}</h3>Velocidad máxima: ${c.kph} km/h<br>Aceleración: ${c.acc}/10<br>Giro: ${c.turn}<br>Precio: ${c.price ? fmt(c.price) : 'Gratis'}<br>${owned ? '<b>Ya lo tienes</b>' : ''}`;
+  $('gBuy').disabled = owned || data.money < c.price;
+  $('gBuy').textContent = owned ? 'Comprado' : 'Comprar ' + fmt(c.price);
+  $('gUse').disabled = !owned || data.sel === gIdx;
+  $('gIdx').value = gIdx;
+  $('owned').innerHTML = '<small>Tus carros: ' + data.owned.length + ' · Carro en uso: ' + car(data.sel).name + '</small>';
+}
+function gMove(d) { gIdx = Math.max(0, Math.min(MAXID, gIdx + d)); drawGarage(); }
+function gJump() {
+  const v = parseInt($('gIdx').value);
+  if (!isNaN(v) && v >= 0 && v <= MAXID) { gIdx = v; drawGarage(); }
+}
+function gBuy() {
+  const c = car(gIdx);
+  if (data.owned.includes(gIdx) || data.money < c.price) return;
+  data.money -= c.price;
+  data.owned.push(gIdx);
+  save(); updMoney(); drawGarage();
+}
+function gUse() {
+  if (data.owned.includes(gIdx)) { data.sel = gIdx; save(); drawGarage(); }
+}
+
+// ===================== PISTAS =====================
+function defaultPts() {
+  const p = [];
+  for (let i = 0; i < 120; i++) {
+    const t = i / 120 * Math.PI * 2;
+    p.push({x: Math.cos(t) * 800 + Math.sin(3 * t) * 70, y: Math.sin(t) * 450 + Math.cos(2 * t) * 60});
+  }
+  return p;
+}
+function denseTrack(pts) {
+  const out = [], n = pts.length;
+  for (let i = 0; i < n; i++) {
+    const a = pts[i], b = pts[(i + 1) % n];
+    const L = Math.hypot(b.x - a.x, b.y - a.y);
+    const steps = Math.max(1, Math.round(L / 10));
+    for (let s = 0; s < steps; s++) {
+      const t = s / steps;
+      out.push({x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t});
+    }
+  }
+  return out;
+}
+function nearest(x, y) {
+  let bi = 0, bd = Infinity;
+  for (let i = 0; i < N; i++) {
+    const dx = T[i].x - x, dy = T[i].y - y, d = dx * dx + dy * dy;
+    if (d < bd) { bd = d; bi = i; }
+  }
+  return {i: bi, d: Math.sqrt(bd)};
+}
+
+// ===================== CARRERA =====================
+function renderSetup() {
+  const opts = ['<option value="default">Pista ovalada</option>']
+    .concat(tracks.map(t => `<option value="${esc(t.name)}">${esc(t.name)}</option>`));
+  $('trackSel').innerHTML = opts.join('');
+  const c = car(data.sel);
+  $('setupCar').textContent = 'Tu carro: ' + c.name + ' (' + c.kph + ' km/h)';
+}
+function mk(o, slot) {
+  const idx = ((N - 1 - slot * 7) % N + N) % N;
+  const p = T[idx], q = T[(idx + 1) % N];
+  const a = Math.atan2(q.y - p.y, q.x - p.x);
+  const side = (slot % 2 ? 1 : -1) * 20;
+  return {...o, x: p.x - Math.sin(a) * side, y: p.y + Math.cos(a) * side, a, v: 0, idx,
+          dist: 0, off: false, finished: false, place: 0, time: 0, skill: o.skill || 1};
+}
+function startRace() {
+  const sel = $('trackSel').value;
+  const pts = sel === 'default' ? defaultPts() : tracks.find(t => t.name === sel).pts;
+  T = denseTrack(pts); N = T.length;
+  const pc = car(data.sel);
+  const bots = +$('botSel').value;
+  R = [mk({name: me, stats: pc, color: pc.color, player: true}, 0)];
+  for (let k = 1; k <= bots; k++) {
+    const bc = car(1 + k * 5);
+    R.push(mk({name: 'Bot ' + k, stats: bc, color: bc.color, skill: 0.84 + Math.random() * 0.16}, k));
+  }
+  phase = 'count'; cd = 3; raceT = 0; placed = 0;
+  racing = true; mpMode = false;
+  screen(null);
+  $('hud').classList.remove('hidden');
+  $('touch').classList.toggle('hidden', !isTouch);
+  $('mpChat').classList.add('hidden');
+}
+function playerInput() {
+  const l = keys.ArrowLeft || keys.KeyA || touch.left;
+  const r = keys.ArrowRight || keys.KeyD || touch.right;
+  const g = keys.ArrowUp || keys.KeyW || touch.gas;
+  const b = keys.ArrowDown || keys.KeyS || touch.brake;
+  return {steer: (r ? 1 : 0) - (l ? 1 : 0), gas: !!g, brake: !!b};
+}
+function botInput(r) {
+  const ah = T[(r.idx + 16) % N];
+  let diff = Math.atan2(ah.y - r.y, ah.x - r.x) - r.a;
+  while (diff > Math.PI) diff -= 2 * Math.PI;
+  while (diff < -Math.PI) diff += 2 * Math.PI;
+  const base = (r.stats.kph / 3.6) * PXM * r.skill;
+  return {
+    steer: Math.max(-1, Math.min(1, diff * 2.2)),
+    gas: Math.abs(diff) < 1.0 || r.v < base * 0.5,
+    brake: Math.abs(diff) > 1.5 && r.v > base * 0.5
+  };
+}
+function physics(r, dt, inp) {
+  const base = (r.stats.kph / 3.6) * PXM;
+  const maxV = base * (r.off ? 0.55 : 1) * r.skill;
+  const acc = (3 + r.stats.acc * 1.5) * PXM;
+  if (inp.gas) r.v += acc * dt;
+  if (inp.brake) r.v -= acc * 2 * dt;
+  r.v -= r.v * 0.12 * dt;
+  if (r.v > maxV) r.v = maxV;
+  if (r.v < 0) r.v = 0;
+  if (r.v > 3) r.a += inp.steer * r.stats.turn * Math.min(1, r.v / (base * 0.4)) * dt;
+  r.x += Math.cos(r.a) * r.v * dt;
+  r.y += Math.sin(r.a) * r.v * dt;
+}
+function collide() {
+  for (let i = 0; i < R.length; i++) for (let j = i + 1; j < R.length; j++) {
+    const a = R[i], b = R[j];
+    const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || 0.01;
+    if (d < 26) {
+      const o = (26 - d) / 2;
+      a.x -= dx / d * o; a.y -= dy / d * o;
+      b.x += dx / d * o; b.y += dy / d * o;
+    }
+  }
+}
+function raceStep(dt) {
+  if (phase === 'count') { cd -= dt; if (cd <= 0) phase = 'run'; }
+  if (phase === 'run') raceT += dt;
+  for (const r of R) {
+    let inp = {steer: 0, gas: false, brake: true};
+    if (phase === 'run') {
+      if (r.player) inp = playerInput();
+      else if (!r.finished) inp = botInput(r);
+    }
+    physics(r, dt, inp);
+  }
+  collide();
+  if (phase === 'run') {
+    for (const r of R) {
+      if (r.finished) continue;
+      const nr = nearest(r.x, r.y);
+      r.off = nr.d > 45;
+      let d = nr.i - r.idx;
+      if (d < -N / 2) d += N;
+      if (d > N / 2) d -= N;
+      if (d > 0) r.dist += d;
+      r.idx = nr.i;
+      if (r.dist >= LAPS * N) {
+        r.finished = true; r.place = ++placed; r.time = raceT;
+        if (r.player) finishRace();
+      }
+    }
+  }
+}
+function finishRace() {
+  if (!racing) return;
+  racing = false; phase = 'end';
+  const p = R.find(r => r.player);
+  const rank = [...R].sort((a, b) =>
+    (a.finished && b.finished) ? a.place - b.place : (a.finished ? -1 : b.finished ? 1 : b.dist - a.dist));
+  const pos = rank.indexOf(p) + 1;
+  const prize = pos === 1 ? WIN_PRIZE : PART_PRIZE;
+  data.money += prize; data.races++;
+  if (pos === 1) data.wins++;
+  save(); updMoney();
+  showResult(`<b>Posición ${pos} de ${R.length}</b><br>Tiempo: ${raceT.toFixed(1)} s<br>Premio: <span class="money">${fmt(prize)}</span>`);
+}
+function showResult(html) { $('resTxt').innerHTML = html; $('result').classList.remove('hidden'); }
+function closeResult() { $('result').classList.add('hidden'); toMenu(); }
+
+// ===================== MULTIJUGADOR =====================
+function startMP() {
+  T = denseTrack(defaultPts()); N = T.length;
+  const pc = car(data.sel);
+  mpMe = {name: me, stats: pc, color: pc.color, x: T[0].x, y: T[0].y - 40, a: 0, v: 0, off: false, skill: 1};
+  R = [];
+  racing = false; mpMode = true;
+  screen(null);
+  $('hud').classList.remove('hidden');
+  $('touch').classList.toggle('hidden', !isTouch);
+  $('mpChat').classList.remove('hidden');
+}
+function connect() {
+  if (ws && (ws.readyState === 0 || ws.readyState === 1)) return;
+  const url = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host;
+  try { ws = new WebSocket(url); } catch (e) { setStatus('No se pudo conectar'); return; }
+  ws.onopen = () => {
+    wsRetry = 0;
+    ws.send(JSON.stringify({t: 'join', name: me}));
+    setStatus('Conectado al servidor');
+  };
+  ws.onmessage = ev => {
+    let m; try { m = JSON.parse(ev.data); } catch (e) { return; }
+    if (m.t === 'state') {
+      others = m.players.filter(p => p.name !== me);
+      presence = new Set(m.online);
+      if (mpMode) $('hudTxt').innerHTML = 'Multijugador · en sala: ' + m.online.length + '/100';
+    } else if (m.t === 'chat') {
+      addChat(m.name, m.text);
+    } else if (m.t === 'full') {
+      setStatus('Sala llena (100 jugadores). Intenta más tarde.');
+    }
+  };
+  ws.onclose = () => {
+    others = []; presence = new Set();
+    setStatus('Sin conexión con el servidor');
+    if (me) setTimeout(connect, Math.min(30000, 2000 * (++wsRetry)));
+  };
+  ws.onerror = () => {};
+}
+function setStatus(t) { $('status').textContent = t; }
+function addChat(n, t) {
+  const d = document.createElement('div');
+  d.textContent = n + ': ' + t;
+  $('chatLog').appendChild(d);
+  $('chatLog').scrollTop = 1e9;
+}
+function sendChat() {
+  const t = $('chatIn').value.trim();
+  if (!t) return;
+  if (!ws || ws.readyState !== 1) {
+    addChat('Sistema', 'No conectado al servidor. Ejecuta "npm start" y abre http://localhost:3000');
+    return;
+  }
+  ws.send(JSON.stringify({t: 'chat', text: t.slice(0, 140)}));
+  $('chatIn').value = '';
+}
+$('chatIn').addEventListener('keydown', e => { if (e.key === 'Enter') sendChat(); e.stopPropagation(); });
+
+// ===================== AMIGOS =====================
+function renderFriends() {
+  const list = data.friends;
+  $('friendList').innerHTML = list.length
+    ? list.map((f, i) => `<div class="card"><span>${esc(f)}</span><span>${presence.has(f) ? '🟢 en línea' : '⚪ desconectado'}</span><button class="btn small red" onclick="delFriend(${i})">Quitar</button></div>`).join('')
+    : '<p><small>Aún no tienes amigos.</small></p>';
+}
+function addFriend() {
+  const n = $('fIn').value.trim();
+  if (!n || n === me) return;
+  if (!data.friends.includes(n)) { data.friends.push(n); save(); }
+  $('fIn').value = '';
+  renderFriends();
+}
+function delFriend(i) { data.friends.splice(i, 1); save(); renderFriends(); }
+
+// ===================== CREADOR DE PISTAS =====================
+const ed = $('ed'), ectx = ed.getContext('2d');
+let edPts = [];
+function initEditor() { edPts = []; $('edName').value = 'Mi pista'; drawEd(); }
+function drawEd() {
+  ectx.fillStyle = '#3d8f3d';
+  ectx.fillRect(0, 0, ed.width, ed.height);
+  if (edPts.length > 1) {
+    ectx.beginPath();
+    ectx.moveTo(edPts[0].x, edPts[0].y);
+    for (const p of edPts.slice(1)) ectx.lineTo(p.x, p.y);
+    ectx.closePath();
+    ectx.strokeStyle = '#4a4a4a'; ectx.lineWidth = 40; ectx.lineJoin = 'round'; ectx.stroke();
+    ectx.strokeStyle = '#fff'; ectx.lineWidth = 2; ectx.setLineDash([10, 10]); ectx.stroke(); ectx.setLineDash([]);
+  }
+  edPts.forEach((p, i) => {
+    ectx.fillStyle = i === 0 ? '#ffd700' : '#fff';
+    ectx.beginPath(); ectx.arc(p.x, p.y, 6, 0, Math.PI * 2); ectx.fill();
+  });
+}
+ed.addEventListener('click', e => {
+  const r = ed.getBoundingClientRect();
+  edPts.push({x: (e.clientX - r.left) * ed.width / r.width, y: (e.clientY - r.top) * ed.height / r.height});
+  drawEd();
+});
+function edUndo() { edPts.pop(); drawEd(); }
+function edClear() { edPts = []; drawEd(); }
+function edSave() {
+  if (edPts.length < 3) { alert('Pon al menos 3 puntos.'); return; }
+  const name = ($('edName').value.trim() || 'Pista') + ' ' + (tracks.length + 1);
+  tracks.push({name, pts: edPts.map(p => ({x: p.x - 450, y: p.y - 300}))});
+  save();
+  alert('Pista guardada: ' + name);
+  toMenu();
+}
+
+// ===================== TUTORIAL =====================
+const STEPS = [
+  'Bienvenido a Racer 2D. Usa las flechas o W A S D para conducir.',
+  'En celular aparecen botones: ◀ ▶ para girar, GAS para acelerar y FRENO para frenar.',
+  'Gana una carrera contra los bots para ganar $12,323 virtuales. Los demás puestos dan $500.',
+  'En el Garaje compras carros nuevos. Tu carro inicial es un F1 que llega a 178 km/h.',
+  'En Multijugador entras a una sala de hasta 100 pilotos con chat y amigos.',
+  'En el Creador de pistas haces tu propio circuito con clics.'
+];
+function showTut() { tStep = 0; tutRender(); $('tut').classList.remove('hidden'); }
+function tutRender() {
+  $('tutTxt').textContent = STEPS[tStep];
+  $('tutBtn').textContent = tStep === STEPS.length - 1 ? 'Terminar' : 'Siguiente';
+}
+function tutNext() {
+  tStep++;
+  if (tStep >= STEPS.length) {
+    $('tut').classList.add('hidden');
+    tutSeen = true;
+    localStorage.setItem('rc_tut', '1');
+    return;
+  }
+  tutRender();
+}
+
+// ===================== CONTROLES =====================
+document.querySelectorAll('#touch button').forEach(b => {
+  const k = b.dataset.k;
+  const on = e => { e.preventDefault(); touch[k] = true; };
+  const off = e => { e.preventDefault(); touch[k] = false; };
+  b.addEventListener('pointerdown', on);
+  b.addEventListener('pointerup', off);
+  b.addEventListener('pointercancel', off);
+  b.addEventListener('pointerleave', off);
+});
+window.addEventListener('keydown', e => {
+  if (e.target && e.target.tagName === 'INPUT') return;
+  keys[e.code] = true;
+  if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) e.preventDefault();
+  if (e.code === 'Escape' && (racing || mpMode)) toMenu();
+});
+window.addEventListener('keyup', e => { keys[e.code] = false; });
+window.addEventListener('blur', () => { keys = {}; touch = {}; });
+
+// ===================== DIBUJO =====================
+function drawTrack() {
+  if (!N) return;
+  ctx.beginPath();
+  ctx.moveTo(T[0].x, T[0].y);
+  for (let i = 1; i < N; i++) ctx.lineTo(T[i].x, T[i].y);
+  ctx.closePath();
+  ctx.strokeStyle = '#4a4a4a'; ctx.lineWidth = 90; ctx.lineJoin = 'round'; ctx.stroke();
+  ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.setLineDash([16, 16]); ctx.stroke(); ctx.setLineDash([]);
+  const a = Math.atan2(T[1].y - T[0].y, T[1].x - T[0].x);
+  ctx.save();
+  ctx.translate(T[0].x, T[0].y); ctx.rotate(a);
+  ctx.fillStyle = '#fff'; ctx.fillRect(-4, -45, 8, 90);
+  ctx.restore();
+}
+function drawCar(r) {
+  ctx.save();
+  ctx.translate(r.x, r.y);
+  ctx.rotate(r.a);
+  ctx.fillStyle = '#111';
+  ctx.fillRect(-12, -17, 11, 8);
+  ctx.fillRect(-12, 9, 11, 8);
+  ctx.fillRect(7, -18, 11, 9);
+  ctx.fillRect(7, 9, 11, 9);
+  ctx.fillRect(-19, -15, 6, 30);
+  ctx.fillRect(20, -16, 5, 32);
+  ctx.fillStyle = r.color;
+  ctx.beginPath();
+  ctx.moveTo(25, 0);
+  ctx.lineTo(14, -6);
+  ctx.lineTo(-6, -7);
+  ctx.lineTo(-15, -4);
+  ctx.lineTo(-15, 4);
+  ctx.lineTo(-6, 7);
+  ctx.lineTo(14, 6);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = '#000'; ctx.lineWidth = 1.5; ctx.stroke();
+  ctx.fillStyle = '#111';
+  ctx.beginPath(); ctx.ellipse(-1, 0, 6, 4.5, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#ddd';
+  ctx.beginPath(); ctx.arc(0, 0, 2.5, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 12px Verdana';
+  ctx.textAlign = 'center';
+  ctx.fillText(r.name, r.x, r.y - 24);
+}
+function draw() {
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.fillStyle = '#3d8f3d';
+  ctx.fillRect(0, 0, cv.width, cv.height);
+  const focus = mpMode ? mpMe : (R[0] || null);
+  if (!focus || (!racing && !mpMode && phase !== 'end')) return;
+  ctx.setTransform(1, 0, 0, 1, cv.width / 2 - focus.x, cv.height / 2 - focus.y);
+  drawTrack();
+  if (mpMode) {
+    for (const o of others) drawCar(o);
+    drawCar(mpMe);
+  } else {
+    for (const r of R) drawCar(r);
+  }
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  if (racing && phase === 'count') {
+    ctx.fillStyle = '#ffd166';
+    ctx.font = 'bold 90px Verdana';
+    ctx.textAlign = 'center';
+    ctx.fillText(Math.ceil(cd) > 0 ? String(Math.ceil(cd)) : 'GO!', cv.width / 2, cv.height / 2);
+  }
+  if (racing) {
+    const p = R.find(r => r.player);
+    const rank = [...R].sort((a, b) => b.dist - a.dist);
+    const pos = rank.indexOf(p) + 1;
+    const lap = Math.min(LAPS, Math.floor(p.dist / N) + 1);
+    $('hudTxt').innerHTML = `Vuelta ${lap}/${LAPS} · Posición ${pos}/${R.length}<br><small>${esc(p.name)} · ${car(data.sel).kph} km/h máx</small>`;
+  }
+}
+
+// ===================== BUCLE =====================
+function loop(t) {
+  const dt = Math.min(0.05, (t - lastT) / 1000);
+  lastT = t;
+  if (racing) raceStep(dt);
+  if (mpMode && mpMe) {
+    physics(mpMe, dt, playerInput());
+    if (t - sendT > 100 && ws && ws.readyState === 1) {
+      ws.send(JSON.stringify({t: 'pos', x: mpMe.x, y: mpMe.y, a: mpMe.a, v: mpMe.v, color: mpMe.color}));
+      sendT = t;
+    }
+  }
+  draw();
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+// ===================== FOTO DE PERFIL =====================
+function drawAvatar() {
+  const img = $('avatar');
+  const has = !!(data && data.avatar);
+  img.src = has ? data.avatar : '';
+  img.style.visibility = has ? 'visible' : 'hidden';
+}
+$('avatarIn').addEventListener('change', e => {
+  const f = e.target.files[0];
+  if (!f) return;
+  if (!f.type.startsWith('image/')) { alert('Elige un archivo de imagen (JPG, PNG, etc.).'); return; }
+  const reader = new FileReader();
+  reader.onload = () => {
+    const im = new Image();
+    im.onload = () => {
+      const c = document.createElement('canvas');
+      c.width = c.height = 128;
+      const g = c.getContext('2d');
+      const side = Math.min(im.width, im.height);
+      const sx = (im.width - side) / 2, sy = (im.height - side) / 2;
+      g.drawImage(im, sx, sy, side, side, 0, 0, 128, 128);
+      if (!data) return;
+      data.avatar = c.toDataURL('image/jpeg', 0.85);
+      save();
+      drawAvatar();
+    };
+    im.onerror = () => alert('No se pudo abrir esa imagen.');
+    im.src = reader.result;
+  };
+  reader.readAsDataURL(f);
+  e.target.value = '';
+});
+
+// ===================== INICIO =====================
+const savedUser = localStorage.getItem('rc_session');
+if (savedUser && users[savedUser]) login(savedUser);
+else screen('auth');
+</script>
+</body>
+</html>

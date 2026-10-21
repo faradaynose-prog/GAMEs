@@ -1,0 +1,12 @@
+{
+  "name": "racer-2d",
+  "version": "1.0.0",
+  "description": "Juego de carreras 2D con bots, multijugador y garaje",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}
